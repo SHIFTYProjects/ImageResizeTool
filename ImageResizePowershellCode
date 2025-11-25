@@ -1,0 +1,242 @@
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# ==========================================================
+# MAIN FORM
+# ==========================================================
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Image Resize Tool"
+$form.Size = New-Object System.Drawing.Size(700,450)
+$form.StartPosition = "CenterScreen"
+$form.Topmost = $true
+
+# ==========================================================
+# CONTROLS
+# ==========================================================
+
+# --- Input Path ---
+$lblInput = New-Object System.Windows.Forms.Label
+$lblInput.Text = "Input Folder or Images:"
+$lblInput.Location = "20,20"
+$lblInput.Size = "200,20"
+$form.Controls.Add($lblInput)
+
+$txtInput = New-Object System.Windows.Forms.TextBox
+$txtInput.Location = "20,45"
+$txtInput.Size = "650,23"
+$form.Controls.Add($txtInput)
+
+$btnInput = New-Object System.Windows.Forms.Button
+$btnInput.Text = "Browse"
+$btnInput.Location = "20,75"
+$btnInput.Size = "120,30"
+$form.Controls.Add($btnInput)
+
+# --- Output Path ---
+$lblOutput = New-Object System.Windows.Forms.Label
+$lblOutput.Text = "Output Folder:"
+$lblOutput.Location = "20,120"
+$form.Controls.Add($lblOutput)
+
+$txtOutput = New-Object System.Windows.Forms.TextBox
+$txtOutput.Location = "20,145"
+$txtOutput.Size = "650,23"
+$form.Controls.Add($txtOutput)
+
+$btnOutput = New-Object System.Windows.Forms.Button
+$btnOutput.Text = "Browse"
+$btnOutput.Location = "20,175"
+$btnOutput.Size = "120,30"
+$form.Controls.Add($btnOutput)
+
+# --- Resize Mode ---
+$grpMode = New-Object System.Windows.Forms.GroupBox
+$grpMode.Text = "Resize Options"
+$grpMode.Location = "20,220"
+$grpMode.Size = "650,100"
+$form.Controls.Add($grpMode)
+
+# Radio: Resize by Max Width
+$rbWidth = New-Object System.Windows.Forms.RadioButton
+$rbWidth.Text = "Resize by Max Width"
+$rbWidth.Location = "20,25"
+$rbWidth.Size = "200,25"
+$rbWidth.Checked = $true
+$grpMode.Controls.Add($rbWidth)
+
+$lblMaxWidth = New-Object System.Windows.Forms.Label
+$lblMaxWidth.Text = "Max Width (px):"
+$lblMaxWidth.Location = "40,50"
+$grpMode.Controls.Add($lblMaxWidth)
+
+$txtMaxWidth = New-Object System.Windows.Forms.TextBox
+$txtMaxWidth.Text = "1920"
+$txtMaxWidth.Location = "150,47"
+$txtMaxWidth.Size = "70,23"
+$grpMode.Controls.Add($txtMaxWidth)
+
+# Radio: Resize by File Size
+$rbSize = New-Object System.Windows.Forms.RadioButton
+$rbSize.Text = "Resize by File Size"
+$rbSize.Location = "250,25"
+$rbSize.Size = "250,25"
+$grpMode.Controls.Add($rbSize)
+
+$lblMaxMB = New-Object System.Windows.Forms.Label
+$lblMaxMB.Text = "Max Size (MB):"
+$lblMaxMB.Location = "270,50"
+$grpMode.Controls.Add($lblMaxMB)
+
+$txtMaxMB = New-Object System.Windows.Forms.TextBox
+$txtMaxMB.Text = "10"
+$txtMaxMB.Location = "360,47"
+$txtMaxMB.Size = "50,23"
+$grpMode.Controls.Add($txtMaxMB)
+
+# --- Start Button ---
+$btnStart = New-Object System.Windows.Forms.Button
+$btnStart.Text = "Start Resizing"
+$btnStart.Location = "20,330"
+$btnStart.Size = "150,35"
+$form.Controls.Add($btnStart)
+
+# --- Output Log ---
+$txtLog = New-Object System.Windows.Forms.TextBox
+$txtLog.Multiline = $true
+$txtLog.ScrollBars = "Vertical"
+$txtLog.Location = "200,330"
+$txtLog.Size = "470,70"
+$form.Controls.Add($txtLog)
+
+# ==========================================================
+# BROWSE INPUT (Files or Folder)
+# ==========================================================
+$btnInput.Add_Click({
+    $dlgFiles = New-Object System.Windows.Forms.OpenFileDialog
+    $dlgFiles.Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif"
+    $dlgFiles.Multiselect = $true
+    $dlgFiles.Title = "Select Images or Cancel To Choose Folder"
+
+    if ($dlgFiles.ShowDialog() -eq "OK") {
+        $txtInput.Text = ($dlgFiles.FileNames -join ";")
+    }
+    else {
+        $folder = New-Object System.Windows.Forms.FolderBrowserDialog
+        if ($folder.ShowDialog() -eq "OK") {
+            $txtInput.Text = $folder.SelectedPath
+        }
+    }
+})
+
+# ==========================================================
+# BROWSE OUTPUT
+# ==========================================================
+$btnOutput.Add_Click({
+    $folder = New-Object System.Windows.Forms.FolderBrowserDialog
+    if ($folder.ShowDialog() -eq "OK") {
+        $txtOutput.Text = $folder.SelectedPath
+    }
+})
+
+# ==========================================================
+# Resize (Max Width)
+# ==========================================================
+function Resize-ByWidth {
+    param(
+        [string]$InputFile,
+        [string]$OutputFile,
+        [int]$MaxWidth
+    )
+
+    $img = [System.Drawing.Image]::FromFile($InputFile)
+
+    if ($img.Width -le $MaxWidth) {
+        Copy-Item $InputFile $OutputFile -Force
+        $img.Dispose()
+        return
+    }
+
+    $ratio = $img.Height / $img.Width
+    $newWidth = $MaxWidth
+    $newHeight = [int]($MaxWidth * $ratio)
+
+    $bmp = New-Object System.Drawing.Bitmap($newWidth, $newHeight)
+    $graph = [System.Drawing.Graphics]::FromImage($bmp)
+    $graph.DrawImage($img, 0, 0, $newWidth, $newHeight)
+
+    $bmp.Save($OutputFile, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+
+    $graph.Dispose()
+    $bmp.Dispose()
+    $img.Dispose()
+}
+
+# ==========================================================
+# Resize (File Size)
+# ==========================================================
+function Resize-ToFileSize {
+    param(
+        [string]$InputFile,
+        [string]$OutputFile,
+        [int]$MaxMB
+    )
+
+    $img = [System.Drawing.Image]::FromFile($InputFile)
+    $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+             Where-Object { $_.MimeType -eq "image/jpeg" }
+
+    $quality = 90
+    $minQuality = 20
+
+    $params = New-Object System.Drawing.Imaging.EncoderParameters(1)
+    $encoder = [System.Drawing.Imaging.Encoder]::Quality
+
+    do {
+        $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter($encoder, $quality)
+        $img.Save($OutputFile, $codec, $params)
+
+        $sizeMB = (Get-Item $OutputFile).Length / 1MB
+        $quality -= 10
+    }
+    while ($sizeMB -gt $MaxMB -and $quality -ge $minQuality)
+
+    $img.Dispose()
+}
+
+# ==========================================================
+# START BUTTON
+# ==========================================================
+$btnStart.Add_Click({
+    $input = $txtInput.Text
+    $output = $txtOutput.Text
+
+    if (-not $input -or -not $output) {
+        [System.Windows.Forms.MessageBox]::Show("Input and output paths are required.")
+        return
+    }
+
+    # Get files
+    if (Test-Path $input -PathType Container) {
+        $files = Get-ChildItem $input -Recurse -Include *.jpg, *.jpeg, *.png, *.bmp, *.gif
+    }
+    else {
+        $files = $input.Split(";") | ForEach-Object { Get-Item $_ }
+    }
+
+    foreach ($file in $files) {
+        $outFile = Join-Path $output $file.Name
+        $txtLog.AppendText("Processing $($file.Name)`r`n")
+
+        if ($rbWidth.Checked) {
+            Resize-ByWidth -InputFile $file.FullName -OutputFile $outFile -MaxWidth ([int]$txtMaxWidth.Text)
+        } else {
+            Resize-ToFileSize -InputFile $file.FullName -OutputFile $outFile -MaxMB ([int]$txtMaxMB.Text)
+        }
+
+        $txtLog.AppendText("Saved → $outFile`r`n`r`n")
+    }
+
+    [System.Windows.Forms.MessageBox]::Show("Resizing Complete!")
+})
+
+$form.ShowDialog()
