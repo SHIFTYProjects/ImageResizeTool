@@ -66,7 +66,8 @@ $grpMode.Controls.Add($rbWidth)
 
 $lblMaxWidth = New-Object System.Windows.Forms.Label
 $lblMaxWidth.Text = "Max Width (px):"
-$lblMaxWidth.Location = "40,50"
+$lblMaxWidth.Location = "30,50"
+$lblMaxWidth.Size = "120,50"
 $grpMode.Controls.Add($lblMaxWidth)
 
 $txtMaxWidth = New-Object System.Windows.Forms.TextBox
@@ -84,12 +85,13 @@ $grpMode.Controls.Add($rbSize)
 
 $lblMaxMB = New-Object System.Windows.Forms.Label
 $lblMaxMB.Text = "Max Size (MB):"
-$lblMaxMB.Location = "270,50"
+$lblMaxMB.Location = "250,50"
+$lblMaxMB.Size = "110,50"
 $grpMode.Controls.Add($lblMaxMB)
 
 $txtMaxMB = New-Object System.Windows.Forms.TextBox
 $txtMaxMB.Text = "10"
-$txtMaxMB.Location = "360,47"
+$txtMaxMB.Location = "370,47"
 $txtMaxMB.Size = "50,23"
 $grpMode.Controls.Add($txtMaxMB)
 
