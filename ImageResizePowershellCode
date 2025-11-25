@@ -10,6 +10,19 @@ $form.Size = New-Object System.Drawing.Size(700,450)
 $form.StartPosition = "CenterScreen"
 $form.Topmost = $true
 
+
+
+
+# --- Progress Bar ---
+$progressBar = New-Object System.Windows.Forms.ProgressBar
+$progressBar.Location = "20,370"
+$progressBar.Size = "150,20"
+$progressBar.Style = "Continuous"
+$progressBar.Minimum = 0
+$progressBar.Maximum = 100
+$progressBar.Value = 0
+$form.Controls.Add($progressBar)
+
 # ==========================================================
 # CONTROLS
 # ==========================================================
@@ -225,7 +238,17 @@ $btnStart.Add_Click({
         $files = $input.Split(";") | ForEach-Object { Get-Item $_ }
     }
 
+    if ($files.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("No images found to process.")
+        return
+    }
+
+    # Set up progress bar
+    $progressBar.Value = 0
+    $progressBar.Maximum = $files.Count
+
     foreach ($file in $files) {
+
         $outFile = Join-Path $output $file.Name
         $txtLog.AppendText("Processing $($file.Name)`r`n")
 
@@ -236,9 +259,14 @@ $btnStart.Add_Click({
         }
 
         $txtLog.AppendText("Saved → $outFile`r`n`r`n")
+
+        # Update progress bar
+        $progressBar.Value += 1
+        $form.Refresh()
     }
 
     [System.Windows.Forms.MessageBox]::Show("Resizing Complete!")
 })
+
 
 $form.ShowDialog()
