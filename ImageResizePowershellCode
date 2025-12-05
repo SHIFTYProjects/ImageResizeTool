@@ -1,3 +1,11 @@
+############################################################
+#SHIFTY's Image Resize and Upscaler
+#Revised:12.5.2025
+#V2.0
+#
+############################################################
+
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -5,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # MAIN FORM
 # ==========================================================
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Image Resize Tool"
+$form.Text = "SHIFTY's Image Resizer and Upscaler"
 $form.Size = New-Object System.Drawing.Size(700,450)
 $form.StartPosition = "CenterScreen"
 $form.Topmost = $true
@@ -16,7 +24,7 @@ $form.Topmost = $true
 # --- Progress Bar ---
 $progressBar = New-Object System.Windows.Forms.ProgressBar
 $progressBar.Location = "20,370"
-$progressBar.Size = "150,20"
+$progressBar.Size = "175,20"
 $progressBar.Style = "Continuous"
 $progressBar.Minimum = 0
 $progressBar.Maximum = 100
@@ -26,6 +34,20 @@ $form.Controls.Add($progressBar)
 # ==========================================================
 # CONTROLS
 # ==========================================================
+
+
+# --- Support File Type Label ---
+$SupportedLabel = New-Object System.Windows.Forms.Label
+$SupportedLabel.Text = "Supported Images|.jpg|.jpeg|.png|.bmp|.gif"
+$SupportedLabel.Location = "400,20"
+$SupportedLabel.Forecolor = "blue"
+$SupportedLabel.Size = "350,20"
+$form.Controls.Add($SupportedLabel)
+
+
+
+
+
 
 # --- Input Path ---
 $lblInput = New-Object System.Windows.Forms.Label
@@ -112,7 +134,9 @@ $grpMode.Controls.Add($txtMaxMB)
 $btnStart = New-Object System.Windows.Forms.Button
 $btnStart.Text = "Start Resizing"
 $btnStart.Location = "20,330"
-$btnStart.Size = "150,35"
+$btnStart.Forecolor = "white"
+$btnStart.Backcolor = "green"
+$btnStart.Size = "175,35"
 $form.Controls.Add($btnStart)
 
 # --- Output Log ---
@@ -154,7 +178,7 @@ $btnOutput.Add_Click({
 })
 
 # ==========================================================
-# Resize (Max Width)
+# Resize (Max Width) - Upscale AND Downscale
 # ==========================================================
 function Resize-ByWidth {
     param(
@@ -165,20 +189,21 @@ function Resize-ByWidth {
 
     $img = [System.Drawing.Image]::FromFile($InputFile)
 
-    if ($img.Width -le $MaxWidth) {
-        Copy-Item $InputFile $OutputFile -Force
-        $img.Dispose()
-        return
-    }
-
+    # Always calculate new dimensions (up or down)
     $ratio = $img.Height / $img.Width
     $newWidth = $MaxWidth
     $newHeight = [int]($MaxWidth * $ratio)
 
     $bmp = New-Object System.Drawing.Bitmap($newWidth, $newHeight)
     $graph = [System.Drawing.Graphics]::FromImage($bmp)
-    $graph.DrawImage($img, 0, 0, $newWidth, $newHeight)
 
+    # High quality resize for both upscaling and downscaling
+    $graph.InterpolationMode  = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graph.SmoothingMode      = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $graph.PixelOffsetMode    = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graph.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+
+    $graph.DrawImage($img, 0, 0, $newWidth, $newHeight)
     $bmp.Save($OutputFile, [System.Drawing.Imaging.ImageFormat]::Jpeg)
 
     $graph.Dispose()
@@ -222,16 +247,34 @@ function Resize-ToFileSize {
 # START BUTTON
 # ==========================================================
 $btnStart.Add_Click({
+
+    # --- Read input/output paths ---
     $input = $txtInput.Text
     $output = $txtOutput.Text
 
+    # --- Basic required paths check ---
     if (-not $input -or -not $output) {
         [System.Windows.Forms.MessageBox]::Show("Input and output paths are required.")
         return
     }
 
-    # Get files
-    if (Test-Path $input -PathType Container) {
+    # --- Test if both paths exist and are folders ---
+    $inputIsFolder  = Test-Path $input -PathType Container
+    $outputIsFolder = Test-Path $output -PathType Container
+
+    # --- Prevent output folder matching input folder ---
+    if ($inputIsFolder -and $outputIsFolder) {
+        $inputFolder  = (Get-Item $input).FullName.TrimEnd('\')
+        $outputFolder = (Get-Item $output).FullName.TrimEnd('\')
+
+        if ($inputFolder -eq $outputFolder) {
+            [System.Windows.Forms.MessageBox]::Show("Output folder cannot be the same as the input folder.`nPlease select a different output folder.")
+            return
+        }
+    }
+
+    # --- Get files ---
+    if ($inputIsFolder) {
         $files = Get-ChildItem $input -Recurse -Include *.jpg, *.jpeg, *.png, *.bmp, *.gif
     }
     else {
@@ -243,13 +286,20 @@ $btnStart.Add_Click({
         return
     }
 
-    # Set up progress bar
+    # --- Set up progress bar ---
     $progressBar.Value = 0
     $progressBar.Maximum = $files.Count
 
     foreach ($file in $files) {
 
         $outFile = Join-Path $output $file.Name
+
+        # --- Extra safety: prevent overwriting the same file ---
+        if ($file.FullName -eq $outFile) {
+            [System.Windows.Forms.MessageBox]::Show("Output file cannot be the same as the input file: $($file.Name)`nPlease choose a different folder.")
+            return
+        }
+
         $txtLog.AppendText("Processing $($file.Name)`r`n")
 
         if ($rbWidth.Checked) {
@@ -260,13 +310,15 @@ $btnStart.Add_Click({
 
         $txtLog.AppendText("Saved → $outFile`r`n`r`n")
 
-        # Update progress bar
+        # --- Update progress bar ---
         $progressBar.Value += 1
         $form.Refresh()
     }
 
     [System.Windows.Forms.MessageBox]::Show("Resizing Complete!")
 })
+
+
 
 
 $form.ShowDialog()
